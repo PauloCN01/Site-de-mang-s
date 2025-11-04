@@ -42,6 +42,15 @@ function Adm() {
       .catch(err => console.log(err));
   }, []);
 
+  function handleLogout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userType');
+    // notify others
+    try { window.dispatchEvent(new CustomEvent('auth-changed')) } catch {}
+    const mensagem = encodeURIComponent('Faça login para continuar.');
+    navigate(`/login?mensagem=${mensagem}`);
+  }
+
   // Funções de admin
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -99,7 +108,12 @@ function Adm() {
 
   return (
     <div className={`adm-container ${role}`}>
-      <h1>Painel de Produtos</h1>
+      <div className="adm-header">
+        <h1>Painel de Produtos</h1>
+        <div className="adm-header-actions">
+          <button className="adm-logout-button" onClick={handleLogout}>Logout</button>
+        </div>
+      </div>
 
       {/* Formulário só aparece para admin */}
       {role === "admin" && (
