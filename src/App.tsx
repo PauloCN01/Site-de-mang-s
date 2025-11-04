@@ -59,6 +59,16 @@ function App() {
       });
   }
 
+  function handleLogout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userType');
+    setNeedLoginPrompt(false);
+    setAuthToken(null);
+    // notify others
+    try { window.dispatchEvent(new CustomEvent('auth-changed')) } catch {}
+    navigate('/');
+  }
+
   return (
     <>
       <div className="top-actions">
@@ -71,17 +81,9 @@ function App() {
             <button
               style={{ marginLeft: 12 }}
               className="login-button"
-              onClick={() => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('userType');
-                setNeedLoginPrompt(false);
-                setAuthToken(null);
-                // notify others
-                try { window.dispatchEvent(new CustomEvent('auth-changed')) } catch {}
-                navigate('/');
-              }}
+              onClick={handleLogout}
             >
-              Sair
+              Logout
             </button>
           </>
         )}
