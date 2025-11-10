@@ -11,11 +11,36 @@ interface Produto {
   urlfoto: string;
 }
 
+// niccole c2: Tipos auxiliares para métricas de carrinhos (admin)
+interface CarrinhoItemAdmin {
+  produtoId: string;
+  nome?: string;
+  precoUnitario?: number | string;
+  quantidade: number;
+}
+interface CarrinhoAdmin {
+  _id: string;
+  usuarioId?: string;
+  itens: CarrinhoItemAdmin[];
+  atualizadoEm?: string;
+}
+interface MetricsDirectResponse {
+  activeUsers: number;
+  totalValue: number;
+  ranking: { produtoId: string; nome?: string; count: number }[];
+}
+
 function Adm() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [form, setForm] = useState({ nome: "", preco: "", descricao: "", urlfoto: "" });
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [role, setRole] = useState<string>("user"); // padrão user
+  // niccole c2: estados para o dashboard admin
+  const [activeUsersCount, setActiveUsersCount] = useState<number>(0);
+  const [totalCartValue, setTotalCartValue] = useState<number>(0);
+  const [rankingItens, setRankingItens] = useState<{ produtoId: string; nome?: string; count: number }[]>([]);
+  const [metricsLoading, setMetricsLoading] = useState<boolean>(false);
+  const [metricsError, setMetricsError] = useState<string>("");
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -40,6 +65,9 @@ function Adm() {
     api.get<Produto[]>("/produtos")
       .then(res => setProdutos(res.data.map((p: any) => ({ ...p, preco: Number(p.preco) })) ))
       .catch(err => console.log(err));
+
+    // niccole c2: Após validar ADMIN, carregar métricas do dashboard
+    carregarMetricasAdmin();
   }, []);
 
   function handleLogout() {
@@ -106,6 +134,85 @@ function Adm() {
       .catch(err => alert(err?.response?.data?.mensagem || "Erro ao excluir produto"));
   };
 
+  // niccole c2: utilitário para tentar múltiplos endpoints até encontrar dados de carrinhos
+  async function tryGet<T = any>(paths: string[]): Promise<T | null> {
+    for (const p of paths) {
+      try {
+        const r = await api.get<T>(p);
+        if (r && r.data) return r.data as any;
+      } catch (_) { /* tenta próxima rota */ }
+    }
+    return null;
+  }
+
+  // niccole c2: calcular métricas a partir da lista de carrinhos
+  function calcularMetricas(carrinhos: CarrinhoAdmin[]) {
+    // usuários com carrinhos "ativos": consideramos carrinhos com pelo menos 1 item
+    const usuariosAtivos = new Set<string>();
+    let somaTotal = 0;
+    const freq = new Map<string, { produtoId: string; nome?: string; count: number }>();
+
+    for (const c of carrinhos) {
+      if (Array.isArray(c.itens) && c.itens.length > 0) {
+        if (c.usuarioId) usuariosAtivos.add(c.usuarioId);
+        for (const it of c.itens) {
+          const preco = Number(it.precoUnitario ?? 0);
+          const qtd = Number(it.quantidade ?? 0);
+          somaTotal += preco * qtd;
+          const key = it.produtoId;
+          if (!key) continue;
+          const prev = freq.get(key) || { produtoId: key, nome: it.nome, count: 0 };
+          prev.count += qtd || 1;
+          if (!prev.nome && it.nome) prev.nome = it.nome;
+          freq.set(key, prev);
+        }
+      }
+    }
+
+    const ranking = Array.from(freq.values()).sort((a, b) => b.count - a.count).slice(0, 10);
+    setActiveUsersCount(usuariosAtivos.size);
+    setTotalCartValue(somaTotal);
+    setRankingItens(ranking);
+  }
+
+  // niccole c2: carregar métricas do backend (tenta endpoint direto de métricas e, se não houver, lista todos e calcula)
+  async function carregarMetricasAdmin() {
+    try {
+      setMetricsLoading(true);
+      setMetricsError("");
+
+      // 1) Tentar endpoint direto de métricas
+      const direct = await tryGet<MetricsDirectResponse>([
+        "/admin/carrinhos/metrics",
+        "/carrinhos/metrics",
+        "/carrinho/metrics"
+      ]);
+      if (direct && typeof direct === "object") {
+        if (typeof (direct as any).activeUsers === "number") setActiveUsersCount((direct as any).activeUsers);
+        if (typeof (direct as any).totalValue === "number") setTotalCartValue((direct as any).totalValue);
+        if (Array.isArray((direct as any).ranking)) setRankingItens((direct as any).ranking);
+        return;
+      }
+
+      // 2) Senão, tentar obter todos os carrinhos e calcular no front
+      const todos = await tryGet<CarrinhoAdmin[]>([
+        "/admin/carrinhos",
+        "/carrinhos",
+        "/carrinho/todos"
+      ]);
+      if (Array.isArray(todos)) {
+        calcularMetricas(todos);
+        return;
+      }
+
+      setMetricsError("Não foi possível obter métricas de carrinhos (verifique a API para endpoints de admin).");
+    } catch (e: any) {
+      setMetricsError(e?.message || "Erro ao carregar métricas");
+    } finally {
+      setMetricsLoading(false);
+    }
+  }
+
   return (
     <div className={`adm-container ${role}`}>
       <div className="adm-header">
@@ -114,6 +221,47 @@ function Adm() {
           <button className="adm-logout-button" onClick={handleLogout}>Logout</button>
         </div>
       </div>
+
+      {/* niccole c2: Seção de métricas do admin - explica o que cada bloco mostra */}
+      {role === "admin" && (
+        <section className="adm-dashboard" aria-label="Dashboard Administrativo">
+          <h2>Dashboard Administrativo — niccole c2</h2>
+          <p>
+            Esta seção mostra: quantidade de usuários com carrinhos ativos, a soma total dos valores de todos os carrinhos
+            e um ranking dos itens mais frequentes nos carrinhos.
+          </p>
+
+          {metricsLoading && <p>Carregando métricas...</p>}
+          {metricsError && <p style={{ color: "red" }}>{metricsError}</p>}
+
+          {!metricsLoading && !metricsError && (
+            <div className="cards-metricas">
+              <div className="card-metrica" aria-label="Usuários com carrinhos ativos">
+                <strong>Usuários com carrinhos ativos</strong>
+                <div>{activeUsersCount}</div>
+              </div>
+              <div className="card-metrica" aria-label="Soma de todos os carrinhos">
+                <strong>Total dos carrinhos</strong>
+                <div>R$ {totalCartValue.toFixed(2)}</div>
+              </div>
+              <div className="card-metrica" aria-label="Ranking de itens mais presentes nos carrinhos">
+                <strong>Top itens nos carrinhos</strong>
+                {rankingItens.length === 0 ? (
+                  <div>Nenhum item encontrado</div>
+                ) : (
+                  <ol>
+                    {rankingItens.map((r) => (
+                      <li key={r.produtoId}>
+                        {(r.nome || "Item")} — {r.count}x
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Formulário só aparece para admin */}
       {role === "admin" && (

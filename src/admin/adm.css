@@ -10,41 +10,6 @@
   margin-bottom: 20px;
 }
 
-/* Header do painel admin (título + ações) */
-.adm-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.adm-header h1 {
-  margin: 0;
-  text-align: left;
-  font-size: 1.5rem;
-}
-
-.adm-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.adm-logout-button {
-  background: #f44336; /* vermelho */
-  color: white;
-  padding: 0.45rem 0.8rem;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.adm-logout-button:hover {
-  background: #d32f2f;
-}
-
 /* Formulário admin */
 .adm-form {
   display: flex;
