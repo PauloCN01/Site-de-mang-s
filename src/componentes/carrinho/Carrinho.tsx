@@ -29,7 +29,8 @@ function Carrinho() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) {
+    if (!token || token === "undefined" || token === "null") {
+      localStorage.removeItem("token"); // Limpa o token inválido
       const mensagem = encodeURIComponent("Faça login para acessar seu carrinho.");
       const redirect = encodeURIComponent(location.pathname + location.search);
       navigate(`/login?mensagem=${mensagem}&redirect=${redirect}`, { replace: true });
@@ -71,15 +72,49 @@ function Carrinho() {
 
   function atualizarQuantidade(itemId: string, novaQtd: number) {
     if (novaQtd <= 0) return;
+    if (!carrinhoId) return alert("Carrinho não encontrado");
 
+    const token = localStorage.getItem("token");
+    if (!token) {
+      const mensagem = encodeURIComponent("Faça login para atualizar o carrinho.");
+      const redirect = encodeURIComponent(location.pathname);
+      navigate(`/login?mensagem=${mensagem}&redirect=${redirect}`);
+      return;
+    }
+
+    const item = itens.find(i => i._id === itemId);
+    if (!item) return;
+
+    // Atualiza o estado otimisticamente
+    setItens(prev =>
+      prev.map(i => 
+        i._id === itemId 
+          ? { ...i, quantidade: novaQtd }
+          : i
+      )
+    );
+
+    // Faz a requisição para o backend
     api
-      .put(`/carrinho/${itemId}`, { quantidade: novaQtd })
-      .then(() => {
-        setItens((prev) =>
-          prev.map((i) => (i._id === itemId ? { ...i, quantidade: novaQtd } : i))
+      .put(
+        `/carrinho/${carrinhoId}`, 
+        { 
+          produtoId: item.produto._id,
+          quantidade: novaQtd
+        }
+      )
+      .catch((error) => {
+        // Em caso de erro, reverte a alteração
+        setItens(prev =>
+          prev.map(i => 
+            i._id === itemId 
+              ? { ...i, quantidade: item.quantidade }
+              : i
+          )
         );
-      })
-      .catch(() => alert("Erro ao atualizar quantidade"));
+        console.error("Erro ao atualizar quantidade:", error);
+        alert(error?.response?.data?.mensagem || "Erro ao atualizar quantidade");
+      });
   }
 
   function removerItem(itemId: string) {
