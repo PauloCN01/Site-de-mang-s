@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/api";
+import "./Carrinho.css"; // importa o CSS 💅
 
 interface CarrinhoItem {
   _id: string;
@@ -14,7 +15,13 @@ interface CarrinhoItem {
   quantidade: number;
 }
 
+interface CarrinhoResponse {
+  _id: string;
+  itens: any[];
+}
+
 function Carrinho() {
+  const [carrinhoId, setCarrinhoId] = useState<string>("");
   const [itens, setItens] = useState<CarrinhoItem[]>([]);
   const [filtro, setFiltro] = useState("");
   const navigate = useNavigate();
@@ -30,23 +37,31 @@ function Carrinho() {
     }
 
     api
-      .get<CarrinhoItem[]>("/carrinho")
+      .get<CarrinhoResponse>("/carrinho", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       .then((res: any) => {
-        const normalizados: CarrinhoItem[] = res.data.map((item: any) => ({
-          ...item,
-          produto: {
-            ...item.produto,
-            preco: Number(item?.produto?.preco),
-          },
-          quantidade: Number(item.quantidade) || 1,
-        }));
-        setItens(normalizados);
+        if (res.data && Array.isArray(res.data.itens)) {
+          setCarrinhoId(res.data._id);
+          const normalizados: CarrinhoItem[] = res.data.itens.map((item: any) => ({
+            _id: item._id || item.produtoId,
+            produto: {
+              _id: item.produtoId,
+              nome: item.nome || "Produto sem nome",
+              preco: Number(item.precoUnitario) || 0,
+              descricao: item.descricao || "",
+              urlfoto: item.urlfoto || "",
+            },
+            quantidade: Number(item.quantidade) || 1,
+          }));
+          setItens(normalizados);
+        }
       })
       .catch((err) => {
         console.error(err);
         alert(err?.response?.data?.mensagem || "Erro ao carregar carrinho");
       });
-  }, []);
+  }, [navigate, location]);
 
   const itensFiltrados = useMemo(() => {
     const f = filtro.trim().toLowerCase();
@@ -56,67 +71,105 @@ function Carrinho() {
 
   function atualizarQuantidade(itemId: string, novaQtd: number) {
     if (novaQtd <= 0) return;
+
     api
       .put(`/carrinho/${itemId}`, { quantidade: novaQtd })
       .then(() => {
-        setItens((prev) => prev.map((i) => (i._id === itemId ? { ...i, quantidade: novaQtd } : i)));
+        setItens((prev) =>
+          prev.map((i) => (i._id === itemId ? { ...i, quantidade: novaQtd } : i))
+        );
       })
-      .catch((err) => alert(err?.response?.data?.mensagem || "Erro ao atualizar quantidade"));
+      .catch(() => alert("Erro ao atualizar quantidade"));
   }
 
   function removerItem(itemId: string) {
+    if (!carrinhoId) return alert("Carrinho não encontrado");
+
     api
-      .delete(`/carrinho/${itemId}`)
+      .delete(`/carrinho/${carrinhoId}/item/${itemId}`)
       .then(() => setItens((prev) => prev.filter((i) => i._id !== itemId)))
-      .catch((err) => alert(err?.response?.data?.mensagem || "Erro ao remover item"));
+      .catch(() => alert("Erro ao remover item"));
   }
 
-  const total = useMemo(() => {
-    return itens.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0);
-  }, [itens]);
+  const total = useMemo(
+    () => itens.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0),
+    [itens]
+  );
 
   return (
-    <div>
-      <h1>Meu Carrinho</h1>
+    <div className="carrinho-page">
+      {/* 🟣 Cabeçalho */}
+      <header className="header">
+        <h1 className="logo">📚 MangáVerse</h1>
+        <nav className="menu">
+          <button onClick={() => navigate("/")} className="menu-btn">Início</button>
+          <button onClick={() => navigate("/produtos")} className="menu-btn">Mangás</button>
+          <button onClick={() => navigate("/perfil")} className="menu-btn">Perfil</button>
+        </nav>
+      </header>
 
-      <div style={{ marginBottom: 12 }}>
-        <input
-          type="text"
-          placeholder="Filtrar por nome do produto"
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-        />
-      </div>
+      <main className="carrinho-container">
+        <h2 className="titulo">🛒 Meu Carrinho</h2>
 
-      {itensFiltrados.length === 0 ? (
-        <p>Seu carrinho está vazio.</p>
-      ) : (
-        <div className="carrinho-lista">
-          {itensFiltrados.map((item) => (
-            <div key={item._id} className="carrinho-item">
-              <img src={item.produto.urlfoto} alt={item.produto.nome} style={{ width: 84, height: 84, objectFit: "cover" }} />
-              <div style={{ textAlign: "left" }}>
-                <h3>{item.produto.nome}</h3>
-                <p>Preço: R$ {Number(item.produto.preco).toFixed(2)}</p>
-                <div>
-                  <button onClick={() => atualizarQuantidade(item._id, item.quantidade - 1)}>-</button>
-                  <input
-                    type="number"
-                    value={item.quantidade}
-                    min={1}
-                    onChange={(e) => atualizarQuantidade(item._id, Number(e.target.value))}
-                    style={{ width: 60, margin: "0 8px" }}
-                  />
-                  <button onClick={() => atualizarQuantidade(item._id, item.quantidade + 1)}>+</button>
-                </div>
-                <button onClick={() => removerItem(item._id)} style={{ marginTop: 8 }}>Remover</button>
-              </div>
-            </div>
-          ))}
+        <div className="filtro-container">
+          <input
+            type="text"
+            placeholder="Filtrar por nome do produto"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+          />
+          <button className="voltar-btn" onClick={() => navigate(-1)}>⬅ Voltar</button>
         </div>
-      )}
 
-      <h2>Total: R$ {total.toFixed(2)}</h2>
+        {itensFiltrados.length === 0 ? (
+          <p className="vazio">Seu carrinho está vazio.</p>
+        ) : (
+          <div className="lista-itens">
+            {itensFiltrados.map((item) => (
+              <div key={item._id} className="card-item">
+                <img
+                  src={item.produto.urlfoto || "https://via.placeholder.com/84"}
+                  alt={item.produto.nome}
+                />
+                <div className="info-item">
+                  <h3>{item.produto.nome}</h3>
+                  <p>Preço: R$ {Number(item.produto.preco).toFixed(2)}</p>
+
+                  <div className="quantidade">
+                    <button onClick={() => atualizarQuantidade(item._id, item.quantidade - 1)}>
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      value={item.quantidade}
+                      min={1}
+                      onChange={(e) =>
+                        atualizarQuantidade(item._id, Number(e.target.value))
+                      }
+                    />
+                    <button onClick={() => atualizarQuantidade(item._id, item.quantidade + 1)}>
+                      +
+                    </button>
+                  </div>
+
+                  <button
+                    className="remover-btn"
+                    onClick={() => removerItem(item._id)}
+                  >
+                    Remover
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h2 className="total">Total: R$ {total.toFixed(2)}</h2>
+      </main>
+
+      <footer className="footer">
+        <p>© 2025 MangáVerse — Todos os direitos reservados.</p>
+      </footer>
     </div>
   );
 }
