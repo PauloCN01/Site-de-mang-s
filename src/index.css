@@ -4,8 +4,10 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Texto padrão agora em preto para melhor legibilidade */
+  color: #000000;
+  /* Fundo padrão em branco (modo claro por padrão) */
+  background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
