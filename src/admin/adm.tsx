@@ -41,6 +41,7 @@ function Adm() {
   const [rankingItens, setRankingItens] = useState<{ produtoId: string; nome?: string; count: number }[]>([]);
   const [metricsLoading, setMetricsLoading] = useState<boolean>(false);
   const [metricsError, setMetricsError] = useState<string>("");
+  const [produtoParaDeletar, setProdutoParaDeletar] = useState<Produto | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -129,9 +130,25 @@ function Adm() {
   };
 
   const handleExcluir = (id: string) => {
-    api.delete(`/produtos/${id}`)
-      .then(() => setProdutos(produtos.filter(p => p._id !== id)))
+    const produto = produtos.find(p => p._id === id);
+    if (produto) {
+      setProdutoParaDeletar(produto);
+    }
+  };
+
+  const confirmarExclusao = () => {
+    if (!produtoParaDeletar) return;
+    
+    api.delete(`/produtos/${produtoParaDeletar._id}`)
+      .then(() => {
+        setProdutos(produtos.filter(p => p._id !== produtoParaDeletar._id));
+        setProdutoParaDeletar(null);  // fecha o dialog
+      })
       .catch(err => alert(err?.response?.data?.mensagem || "Erro ao excluir produto"));
+  };
+
+  const cancelarExclusao = () => {
+    setProdutoParaDeletar(null);  // fecha o dialog
   };
 
   // niccole c2: utilitário para tentar múltiplos endpoints até encontrar dados de carrinhos
@@ -275,6 +292,20 @@ function Adm() {
             <button type="button" onClick={cancelarEdicao} style={{ marginLeft: 8 }}>Cancelar</button>
           )}
         </form>
+      )}
+
+      {/* Dialog de confirmação de exclusão */}
+      {produtoParaDeletar && (
+        <div className="confirmation-dialog">
+          <div className="dialog-content">
+            <h3>Confirmar Exclusão</h3>
+            <p>Tem certeza que deseja excluir o produto "{produtoParaDeletar.nome}"?</p>
+            <div className="dialog-actions">
+              <button onClick={confirmarExclusao}>Confirmar</button>
+              <button onClick={cancelarExclusao}>Cancelar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="produtos-list">
